@@ -1,0 +1,76 @@
+name: flash-sale-platform-ci
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: flash-sale-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  unit-and-static:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: prototype/go.mod
+          cache-dependency-path: prototype/go.sum
+      - name: Local correctness audit
+        run: make audit-local
+      - name: HTTP end-to-end demo
+        run: make demo-e2e
+      - name: Gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  docker-integration:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: prototype/go.mod
+          cache-dependency-path: prototype/go.sum
+      - name: Create isolated local secrets
+        shell: bash
+        run: |
+          umask 077
+          cat > .env <<EOF
+          POSTGRES_PASSWORD=$(openssl rand -hex 24)
+          ADMIN_TOKEN=$(openssl rand -hex 32)
+          ADMISSION_SIGNING_KEY=$(openssl rand -hex 32)
+          ADMISSION_SIGNING_KEY_ID=ci-admission-v1
+          PSP_WEBHOOK_SECRET=$(openssl rand -hex 32)
+          HOME_REGION=ci-region
+          REGION_WRITER_ID=ci-region-primary
+          LEASE_EPOCH=1
+          LEASE_DURATION_SECONDS=30
+          PSP_RATE_PER_SECOND=1400
+          PSP_BURST=50
+          PSP_MAX_CONCURRENT=64
+          EOF
+      - name: Build integration image and run live dependency tests
+        run: make integration
+      - name: Run integration suite with race detector
+        run: make race-integration
+      - name: Start complete local application profile
+        run: docker compose --profile app up -d --build --wait
+      - name: Smoke test live API
+        run: bash scripts/smoke-compose.sh
+      - name: Capture diagnostics on failure
+        if: failure()
+        run: |
+          docker compose ps
+          docker compose logs --no-color --tail=250
+      - name: Stop stack and remove CI data
+        if: always()
+        run: docker compose --profile app --profile test down --volumes --remove-orphans

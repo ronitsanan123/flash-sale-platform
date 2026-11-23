@@ -1,0 +1,38 @@
+# Illustrative only. Replace namespace, deployment, metric names, auth and
+# connection limits for the target cluster before applying.
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: flashsale-reservation
+  namespace: flashsale
+spec:
+  scaleTargetRef:
+    name: flashsale-reservation
+  minReplicaCount: 6
+  maxReplicaCount: 80
+  pollingInterval: 5
+  cooldownPeriod: 60
+  triggers:
+    - type: prometheus
+      metadata:
+        serverAddress: http://prometheus-operated.monitoring.svc:9090
+        metricName: admitted_requests_per_pod
+        query: sum(rate(flashsale_admitted_requests_total[1m])) / clamp_min(sum(kube_deployment_status_replicas{deployment="flashsale-reservation"}), 1)
+        threshold: "250"
+    - type: prometheus
+      metadata:
+        serverAddress: http://prometheus-operated.monitoring.svc:9090
+        metricName: reservation_inflight_per_pod
+        query: sum(flashsale_inflight_requests) / clamp_min(sum(kube_deployment_status_replicas{deployment="flashsale-reservation"}), 1)
+        threshold: "80"
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: flashsale-reservation
+  namespace: flashsale
+spec:
+  minAvailable: 5
+  selector:
+    matchLabels:
+      app: flashsale-reservation

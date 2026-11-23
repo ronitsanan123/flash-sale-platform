@@ -1,0 +1,38 @@
+# Illustrative only. Log-age/lag controls worker scale; admission remains
+# capped by PSP and durable confirmation capacity.
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: flashsale-order-worker
+  namespace: flashsale
+spec:
+  scaleTargetRef:
+    name: flashsale-order-worker
+  minReplicaCount: 4
+  maxReplicaCount: 48
+  pollingInterval: 5
+  cooldownPeriod: 90
+  triggers:
+    - type: prometheus
+      metadata:
+        serverAddress: http://prometheus-operated.monitoring.svc:9090
+        metricName: checkout_consumer_lag
+        query: sum(flashsale_consumer_lag{topic="checkout-events"})
+        threshold: "500"
+    - type: prometheus
+      metadata:
+        serverAddress: http://prometheus-operated.monitoring.svc:9090
+        metricName: checkout_oldest_event_age_seconds
+        query: max(flashsale_consumer_oldest_event_age_seconds{topic="checkout-events"})
+        threshold: "3"
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: flashsale-order-worker
+  namespace: flashsale
+spec:
+  minAvailable: 3
+  selector:
+    matchLabels:
+      app: flashsale-order-worker

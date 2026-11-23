@@ -1,0 +1,17 @@
+.env
+.env.*.local
+*.log
+*.out
+*.test
+coverage.out
+coverage.html
+bin/
+.tmp/
+.DS_Store
+.idea/
+.vscode/
+postgres-data/
+redis-data/
+
+__pycache__/
+*.py[cod]

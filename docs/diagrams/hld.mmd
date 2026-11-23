@@ -1,0 +1,184 @@
+%% High-level design for the spike-resilient flash-sale and ticketing platform.
+%% Shaded subgraphs show deployment, failure and ownership scopes; nested components do not all fail as one unit.
+%% AZ a and AZ b are independent home-region failure domains; APP / WORKER are logical tiers.
+%% Numbered edges 1-15 are the customer request and order flow; read the companion
+%% card renderer serpentine: row 1 L->R, row 2 R->L, row 3 L->R. Unnumbered edges
+%% are control-plane, callback, capture, replication, reconciliation and telemetry.
+%% Home region has two AZs. A separate standby region provides synchronous remote
+%% PostgreSQL WAL durability for acknowledged confirmations; this is 2-of-2 primary/
+%% standby replication, NOT a majority consensus quorum.
+flowchart TB
+  subgraph CL["CLIENTS"]
+    U["Browsers and mobile apps<br/>up to 10M waiting"]
+  end
+
+  subgraph EDGE["GLOBAL EDGE - FAILURE BOUNDARY"]
+    direction LR
+    CDN["CDN and edge cache<br/>static/catalog: minutes<br/>availability: 1s + stale-while-revalidate"]
+    WAF["WAF and bot management<br/>IP / token / account limits<br/>separate authenticated PSP webhook route"]
+    WR["Virtual waiting room<br/>signed queue and admission tokens<br/>polls served from cached watermark<br/>OPEN / TEMP_UNAVAILABLE / SOLD_OUT<br/>ACTIVE / PAUSED admission gate<br/>PAUSED: preserve place; issue no token<br/>on CTRL loss: hold last watermark;<br/>fail closed for admission; browse stays open"]
+  end
+
+  subgraph HOME["HOME REGION - SINGLE WRITER FOR THIS ITEM"]
+    direction TB
+    subgraph AZA["AZ a - INDEPENDENT FAILURE BOUNDARY"]
+      direction LR
+      subgraph APPA["APP TIER - STATELESS LOGICAL GROUPING"]
+        direction TB
+        GW["API gateway<br/>offline admission-token verification<br/>priority load shedding"]
+        RES["Reservation service<br/>1s local cache + coalesced reads<br/>specific seat: hash(unit_id) % S<br/>any unit: walk from hash(user_id) % S<br/>HSETNX hold-claim:{base64url(hold_id)}<br/>claim is immutable; drained shard returns SOLD_OUT"]
+        PWH["PSP webhook ingress<br/>signature / replay verification<br/>event-ID deduplication"]
+      end
+      subgraph WORKA["WORKER TIER - LEASED LOGICAL ROLES"]
+        direction TB
+        ADM["Admission controller<br/>per-item lease; stock- and PSP-aware cap<br/>SOLD_OUT only when no available / recoverable units remain<br/>publishes OPEN / TEMP_UNAVAILABLE / SOLD_OUT + PAUSED gate<br/>PAUSED is not terminal SOLD_OUT<br/>pauses new admits on stale / missing standby ACK"]
+        RLY["Outbox relay<br/>one active owner per Redis stream"]
+        REAP["Hold reaper<br/>one active owner per shard"]
+        WRK["Order workers<br/>12 Kafka partitions; per-order ordering<br/>bounded retry -> requeue -> DLQ<br/>authorize + confirm; never capture"]
+        CAP["Capture sweeper<br/>deferred idempotent capture<br/>per-PSP-call quota budget"]
+        REC["Reconciler<br/>DLQ triage; fenced regional recovery<br/>periodic, terminal-safe repairs"]
+      end
+    end
+
+    subgraph AZB["AZ b - INDEPENDENT FAILURE BOUNDARY"]
+      direction LR
+      REP["APP replicas<br/>gateway / reservation / webhook paths<br/>N+1 capacity; no AZ affinity"]
+      WKR["WORKER replicas<br/>same ADM / RLY / REAP / WRK / CAP / REC roles<br/>lease and partition takeover with fencing"]
+    end
+
+    subgraph DATA["DATA TIER - MULTI-AZ FAILURE BOUNDARY"]
+      direction LR
+      MEM[("Redis inventory keyspace<br/>unit tokens, holds, deadline index<br/>same-slot per-shard Lua keys + outbox streams<br/>separate from admission control keys")]
+      CTRL[("Dedicated HA control-plane keyspace / partition<br/>per-item watermark + 3-state availability + admission gate<br/>stock summary + PSP breaker / effective auth capacity<br/>standby ACK health / freshness; replicated + failover<br/>isolated from hot inventory shard keys")]
+      LOG[["Kafka API event log<br/>12 partitions; key = order_id"]]
+      DLQ[["Dead-letter topic<br/>after bounded retries<br/>no blind automatic replay"]]
+      DB[("Relational DB + pooler<br/>orders, payments, durable idempotency<br/>standby-durable PSP scan checkpoint<br/>CAS state; UNIQUE live item_id + unit_id")]
+      KV[("Key-value read model<br/>versioned order status + catalog documents<br/>not authoritative for payment idempotency")]
+      AN[("Columnar analytics store<br/>fed asynchronously from event log")]
+    end
+  end
+
+  subgraph REMOTE["OTHER REGIONS - EDGE / READ TIER"]
+    direction LR
+    REDGE["Regional CDN + waiting room<br/>local browse and queue polling"]
+    RREAD[("Regional read replicas<br/>catalog / status as freshness permits")]
+    RGW["Regional gateway<br/>writes forwarded to home region<br/>never a local inventory writer"]
+  end
+
+  subgraph STBY["STANDBY REGION - SYNCHRONOUS REMOTE DATABASE STANDBY"]
+    direction LR
+    SDB[("PostgreSQL synchronous standby<br/>remote WAL flush acknowledgement required<br/>RPO 0 for acknowledged CONFIRMED commits")]
+    SLOG[["Async event-log replica<br/>rebuild / reconcile before failover opens"]]
+  end
+
+  subgraph PSPB["EXTERNAL PSP - INDEPENDENT FAILURE BOUNDARY"]
+    PSP["Payment provider<br/>authorize / capture / void / key lookup<br/>paginated authorization-ledger discovery<br/>metadata + snapshot cursor + complete_through"]
+  end
+
+  subgraph OBS["OBSERVABILITY - NON-CRITICAL TELEMETRY"]
+    O11Y["OpenTelemetry collector + Prometheus<br/>metrics, traces, structured logs and alerts<br/>never gates the sale path"]
+  end
+
+  %% Customer flow and admission.
+  U -->|"1 browse / availability; ~50:1 read/write; CDN absorbs catalog + availability"| CDN
+  U -->|"2 join / poll queue; ~500K edge polls/s from 10M waiters / 20s (assumption)"| WAF
+  WAF --> WR
+  ADM -->|"3 publish 1s watermark + admission gate; standby ACK loss => PAUSED, not SOLD_OUT"| CTRL
+  DB -.->|"remote standby ACK health heartbeat; stale / missing => unavailable"| CTRL
+  CTRL -->|"cached per-item watermark + gate; PAUSED means no new tokens"| WR
+  WR -->|"4 signed, short-lived admission token"| U
+  WAF -->|"5 admitted reserve / checkout; status separately authenticated"| GW
+  GW --> RES
+  RES -->|"6 HSETNX bind immutable hold-to-shard claim; selected-shard Lua atomically reserves HELD + deadline + outbox"| MEM
+  RES -->|"7 lock HELD -> PAYING; return 202 + status URL"| MEM
+
+  %% Durable asynchronous order/payment pipeline.
+  MEM -->|"8 outbox stream entries"| RLY
+  RLY -->|"9 produce; acknowledge only after broker ack"| LOG
+  LOG -->|"10 consume in order per order_id; offset after durable handling, durable requeue, or durable DLQ + UNKNOWN"| WRK
+  WRK -->|"11 local WAL commit: PENDING_PAYMENT + INTENT (synchronous_commit=local); not region-durable"| DB
+  WRK -->|"12 authorize only if step 11 succeeded; key = order_id; metadata = item / unit / user / home / epoch; <=1,400 auth/s"| PSP
+  WRK -->|"13 CAS AUTHORIZED + CONFIRMED with synchronous_commit=on; wait for remote WAL flush ACK"| DB
+  DB ==>|"13 synchronous PostgreSQL primary -> remote standby WAL flush (synchronous_commit=on)"| SDB
+  SDB -->|"13 remote durable WAL flush ACK; DB commit returns only after ACK"| WRK
+  WRK -->|"14 after remote ACK: mark unit sold; never re-offer"| MEM
+  DB -.->|"11 unique-index loser: persist CANCELLED; bypass 12 and 13; short-circuit to 14"| WRK
+  WRK -.->|"14 unique loser: forfeit unit pending reconcile; NEVER call PSP"| MEM
+  WRK -.->|"CAS CANCELLED after definitive decline / void"| DB
+  WRK -.->|"after DB commit + monotonic version: project PENDING_PAYMENT (11, local WAL),<br/>CONFIRMED (13, only after remote standby WAL ACK), or CANCELLED (definitive failure)"| KV
+  PSP -.->|"definitive decline / void result"| WRK
+  WRK -.->|"release hold only after definitive decline / void"| MEM
+
+  %% Status is safe immediately after 202, including before the worker creates DB order.
+  GW -->|"15 status fast path: versioned KV read"| KV
+  GW -.->|"15 if KV is missing / stale: authoritative read"| DB
+  GW -.->|"15 if DB row is absent: return Redis PAYING / PROCESSING"| MEM
+
+  %% Capture is deliberately off the order-worker hot path.
+  DB -->|"AUTHORIZED + CONFIRMED; capture pending"| CAP
+  CAP -->|"deferred idempotent capture; token bucket per PSP call"| PSP
+  CAP -->|"persist CAPTURED with CAS"| DB
+  CAP -->|"after DB commit: project CAPTURED with monotonic status version"| KV
+
+  %% PSP callback path bypasses the waiting room and deduplicates before processing.
+  PSP -.->|"signed async authorization / capture / 3DS callback"| WAF
+  WAF -->|"authenticated callback route; no admission token"| PWH
+  PWH -->|"verify signature + timestamp; dedupe event ID"| LOG
+
+  %% Retry, DLQ, and reconciliation paths.
+  WRK -->|"bounded retries exhausted"| DLQ
+  DLQ -->|"monitor and triage unresolved orders"| REC
+  REC -.->|"operator-approved, audited replay after remediation"| LOG
+  REC -.->|"compare holds and unit conservation"| MEM
+  REC -.->|"compare orders and payments"| DB
+  REC -.->|"regional recovery: scan paginated authorization ledger by bounded time window; filter home_region / epoch"| PSP
+  PSP -.->|"ledger pages: order_id / idempotency key + metadata + cursor + complete_through"| REC
+  REC -.->|"for discovered or known IDs: key lookup; void without durable CONFIRMED"| PSP
+
+  %% Closed-loop admission feedback and hold expiry semantics.
+  MEM -.->|"publish aggregate stock summary; not used for queue polling"| CTRL
+  WRK -.->|"publish breaker-open state + effective auth capacity"| CTRL
+  ADM -.->|"read stock summary + PSP breaker / capacity + standby ACK health"| CTRL
+  ADM -.->|"refresh authoritative reservable stock snapshot"| MEM
+  CTRL -.->|"publish signed/versioned watermark + 3-state availability"| WR
+  REAP -->|"release expired HELD; keep PAYING locked; append HoldPayOverdue; never timer-release PAYING"| MEM
+  MEM -->|"HoldPayOverdue in Redis outbox"| RLY
+  RLY -->|"publish overdue event"| LOG
+  LOG -->|"resolve overdue hold"| WRK
+
+  %% Regional recovery discovers unknown order IDs via a complete PSP ledger scan;
+  %% per-key lookup is only for IDs already known from the standby or scan results.
+  %% A PSP without stable pagination, retained metadata and a completeness watermark
+  %% requires a cross-region-durable pre-PSP attempt journal before write failover.
+  %% Availability, multi-AZ failover, and multi-region behaviour.
+  CDN -.->|"cache miss only"| GW
+  WAF -.->|"load balance stateless app + webhook paths"| REP
+  REP --> MEM
+  REP --> DB
+  WKR -.->|"take over per-item / stream / shard / capture leases with higher fencing epoch"| MEM
+  WKR -.->|"take over Kafka consumer partitions"| LOG
+  WKR -.->|"take over order / payment work"| DB
+  WKR -.->|"take over PSP tasks"| PSP
+  DB -.->|"rebuild versioned read model from durable state"| KV
+  REC -.->|"periodically reconcile PSP ledger; synchronously persist complete_through checkpoint; on failover load checkpoint and persist recovery records"| DB
+  REC -.->|"verify remote CONFIRMED commit; never infer confirmation from authorization"| DB
+  LOG -.->|"asynchronous lifecycle feed"| AN
+  LOG -.->|"asynchronous replication; reconcile before regional failover"| SLOG
+  RGW -.->|"forward writes to home gateway with item route + fencing epoch"| GW
+  REDGE --> RREAD
+  REDGE --> RGW
+
+  %% Telemetry has no dependency in the sale path.
+  WAF -.-> O11Y
+  GW -.-> O11Y
+  RES -.-> O11Y
+  ADM -.-> O11Y
+  WRK -.-> O11Y
+  CAP -.-> O11Y
+  DB -.-> O11Y
+  PWH -.-> O11Y
+
+  classDef store fill:#eef6ff,stroke:#2b6cb0,color:#1a202c
+  classDef ext fill:#fff4e5,stroke:#b7791f,color:#1a202c
+  class MEM,CTRL,LOG,DLQ,DB,KV,AN,SDB,SLOG,RREAD store
+  class PSP ext

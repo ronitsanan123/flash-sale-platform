@@ -1,0 +1,292 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="3000" height="2370" viewBox="0 0 3000 2370">
+<defs>
+  <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="4" orient="auto" markerUnits="strokeWidth">
+    <path d="M0,0 L8,4 L0,8 z" fill="#334155"/>
+  </marker>
+</defs>
+<rect width="100%" height="100%" fill="#ffffff"/>
+
+<text x="70" y="72" font-family="Inter,Arial,sans-serif" font-size="30" font-weight="700" fill="#17212f" text-anchor="start">SPIKE-RESILIENT FLASH SALE &amp; TICKETING PLATFORM</text>
+<text x="70" y="108" font-family="Inter,Arial,sans-serif" font-size="16" font-weight="400" fill="#475569" text-anchor="start">Final high-level design | Read numbered cards: Row 1 left-to-right →, Row 2 right-to-left ←, Row 3 left-to-right →. Lower panels show deployment boundaries and recovery paths.</text>
+<rect x="50" y="140" width="2900" height="840" rx="22" fill="#f8fafc" stroke="#64748b" stroke-width="2"/>
+<text x="74" y="178" font-family="Inter,Arial,sans-serif" font-size="21" font-weight="700" fill="#64748b" text-anchor="start">PRIMARY REQUEST + ORDER FLOW (1–15)</text>
+<text x="74" y="205" font-family="Inter,Arial,sans-serif" font-size="14" font-weight="400" fill="#475569" text-anchor="start">Customer-facing path is fast and bounded; order creation, authorization and capture are asynchronous after checkout acceptance. Row directions are explicitly serpentine.</text>
+<rect x="80" y="220" width="500" height="190" rx="16" fill="#eff6ff" stroke="#60a5fa" stroke-width="2"/>
+<circle cx="111" cy="251" r="17" fill="#1d4ed8"/>
+<text x="111" y="257" font-family="Inter,Arial,sans-serif" font-size="17" font-weight="700" fill="#ffffff" text-anchor="middle">1</text>
+<text x="140" y="258" font-family="Inter,Arial,sans-serif" font-size="19" font-weight="700" fill="#17212f" text-anchor="start">BROWSE / AVAILABILITY</text>
+<text x="102" y="293" font-family="Inter,Arial,sans-serif" font-size="15" font-weight="400" fill="#334155" text-anchor="start">~50:1 read/write load</text>
+<text x="102" y="315" font-family="Inter,Arial,sans-serif" font-size="15" font-weight="400" fill="#334155" text-anchor="start">CDN absorbs catalog + availability reads</text>
+<text x="102" y="337" font-family="Inter,Arial,sans-serif" font-size="15" font-weight="400" fill="#334155" text-anchor="start">Availability cache: 1s + stale-while-revalidate</text>
+<text x="102" y="359" font-family="Inter,Arial,sans-serif" font-size="15" font-weight="400" fill="#334155" text-anchor="start">Cached counts never allocate inventory</text>
+<rect x="665" y="220" width="500" height="190" rx="16" fill="#fff7ed" stroke="#fb923c" stroke-width="2"/>
+<circle cx="696" cy="251" r="17" fill="#1d4ed8"/>
+<text x="696" y="257" font-family="Inter,Arial,sans-serif" font-size="17" font-weight="700" fill="#ffffff" text-anchor="middle">2</text>
+<text x="725" y="258" font-family="Inter,Arial,sans-serif" font-size="19" font-weight="700" fill="#17212f" text-anchor="start">JOIN / POLL WAITING ROOM</text>
+<text x="687" y="293" font-family="Inter,Arial,sans-serif" font-size="15" font-weight="400" fill="#334155" text-anchor="start">~500K edge polls/s (10M / 20s poll assumption)</text>
+<text x="687" y="315" font-family="Inter,Arial,sans-serif" font-size="15" font-weight="400" fill="#334155" text-anchor="start">WAF: bot management + IP/token/account limits</text>
+<text x="687" y="337" font-family="Inter,Arial,sans-serif" font-size="15" font-weight="400" fill="#334155" text-anchor="start">Queue polls served from cached watermark; jittered</text>
+<text x="687" y="359" font-family="Inter,Arial,sans-serif" font-size="15" font-weight="400" fill="#334155" text-anchor="start">PAUSED: preserve place; issue no admission token</text>
+<text x="687" y="381" font-family="Inter,Arial,sans-serif" font-size="15" font-weight="400" fill="#334155" text-anchor="start">Terminal SOLD_OUT returns a final queue answer</text>
+<rect x="1250" y="220" width="500" height="190" rx="16" fill="#ecfdf5" stroke="#34d399" stroke-width="2"/>
+<circle cx="1281" cy="251" r="17" fill="#1d4ed8"/>
+<text x="1281" y="257" font-family="Inter,Arial,sans-serif" font-size="17" font-weight="700" fill="#ffffff" text-anchor="middle">3</text>
+<text x="1310" y="258" font-family="Inter,Arial,sans-serif" font-size="19" font-weight="700" fill="#17212f" text-anchor="start">ADMISSION CONTROL</text>
+<text x="1272" y="293" font-family="Inter,Arial,sans-serif" font-size="15" font-weight="400" fill="#334155" text-anchor="start">Publishes 1s watermark + admission gate from HA CTRL</text>
+<text x="1272" y="315" font-family="Inter,Arial,sans-serif" font-size="15" font-weight="400" fill="#334155" text-anchor="start">OPEN / TEMP_UNAVAILABLE / SOLD_OUT inventory states</text>
+<text x="1272" y="337" font-family="Inter,Arial,sans-serif" font-size="15" font-weight="400" fill="#334155" text-anchor="start">PAUSED admission gate is not terminal SOLD_OUT</text>
+<text x="1272" y="359" font-family="Inter,Arial,sans-serif" font-size="15" font-weight="400" fill="#334155" text-anchor="start">Pause on unknown stock, PSP breaker / cap, lost CTRL</text>
+<text x="1272" y="381" font-family="Inter,Arial,sans-serif" font-size="15" font-weight="400" fill="#334155" text-anchor="start">or stale / missing remote standby ACK</text>
+<rect x="1835" y="220" width="500" height="190" rx="16" fill="#eff6ff" stroke="#60a5fa" stroke-width="2"/>
+<circle cx="1866" cy="251" r="17" fill="#1d4ed8"/>
+<text x="1866" y="257" font-family="Inter,Arial,sans-serif" font-size="17" font-weight="700" fill="#ffffff" text-anchor="middle">4</text>
+<text x="1895" y="258" font-family="Inter,Arial,sans-serif" font-size="19" font-weight="700" fill="#17212f" text-anchor="start">SIGNED ADMISSION TOKEN</text>
+<text x="1857" y="293" font-family="Inter,Arial,sans-serif" font-size="15" font-weight="400" fill="#334155" text-anchor="start">Waiting room returns short-lived signed token</text>
+<text x="1857" y="315" font-family="Inter,Arial,sans-serif" font-size="15" font-weight="400" fill="#334155" text-anchor="start">Offline verification at gateway</text>
+<text x="1857" y="337" font-family="Inter,Arial,sans-serif" font-size="15" font-weight="400" fill="#334155" text-anchor="start">Status + PSP webhook use separate auth</text>
+<rect x="2420" y="220" width="500" height="190" rx="16" fill="#f8fafc" stroke="#94a3b8" stroke-width="2"/>
+<circle cx="2451" cy="251" r="17" fill="#1d4ed8"/>
+<text x="2451" y="257" font-family="Inter,Arial,sans-serif" font-size="17" font-weight="700" fill="#ffffff" text-anchor="middle">5</text>
+<text x="2480" y="258" font-family="Inter,Arial,sans-serif" font-size="19" font-weight="700" fill="#17212f" text-anchor="start">API GATEWAY</text>
+<text x="2442" y="293" font-family="Inter,Arial,sans-serif" font-size="15" font-weight="400" fill="#334155" text-anchor="start">Admission check for reserve / checkout</text>
+<text x="2442" y="315" font-family="Inter,Arial,sans-serif" font-size="15" font-weight="400" fill="#334155" text-anchor="start">Priority rate limits and load shedding</text>
+<text x="2442" y="337" font-family="Inter,Arial,sans-serif" font-size="15" font-weight="400" fill="#334155" text-anchor="start">~1,750 admitted/s assumed safe cap</text>
+<text x="2442" y="359" font-family="Inter,Arial,sans-serif" font-size="15" font-weight="400" fill="#334155" text-anchor="start">Reservation-path p99 SLO &lt;500 ms</text>
+<polyline points="587,315 657,315" fill="none" stroke="#334155" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<polyline points="1172,315 1242,315" fill="none" stroke="#334155" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<polyline points="1757,315 1827,315" fill="none" stroke="#334155" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<polyline points="2342,315 2412,315" fill="none" stroke="#334155" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<rect x="2420" y="470" width="500" height="190" rx="16" fill="#eff6ff" stroke="#60a5fa" stroke-width="2"/>
+<circle cx="2451" cy="501" r="17" fill="#1d4ed8"/>
+<text x="2451" y="507" font-family="Inter,Arial,sans-serif" font-size="17" font-weight="700" fill="#ffffff" text-anchor="middle">6</text>
+<text x="2480" y="508" font-family="Inter,Arial,sans-serif" font-size="19" font-weight="700" fill="#17212f" text-anchor="start">RESERVATION ROUTER</text>
+<text x="2442" y="543" font-family="Inter,Arial,sans-serif" font-size="15" font-weight="400" fill="#334155" text-anchor="start">Specific seat: hash(unit_id) % S</text>
+<text x="2442" y="565" font-family="Inter,Arial,sans-serif" font-size="15" font-weight="400" fill="#334155" text-anchor="start">Any unit: walk from hash(user_id) % S</text>
+<text x="2442" y="587" font-family="Inter,Arial,sans-serif" font-size="15" font-weight="400" fill="#334155" text-anchor="start">HSETNX per-hold key: hold-claim:{base64url(id)}</text>
+<text x="2442" y="609" font-family="Inter,Arial,sans-serif" font-size="15" font-weight="400" fill="#334155" text-anchor="start">Bound shard drains → SOLD_OUT; never remap</text>
+<rect x="1835" y="470" width="500" height="190" rx="16" fill="#eff6ff" stroke="#60a5fa" stroke-width="2"/>
+<circle cx="1866" cy="501" r="17" fill="#1d4ed8"/>
+<text x="1866" y="507" font-family="Inter,Arial,sans-serif" font-size="17" font-weight="700" fill="#ffffff" text-anchor="middle">7</text>
+<text x="1895" y="508" font-family="Inter,Arial,sans-serif" font-size="19" font-weight="700" fill="#17212f" text-anchor="start">REDIS ATOMIC HOLD</text>
+<text x="1857" y="543" font-family="Inter,Arial,sans-serif" font-size="15" font-weight="400" fill="#334155" text-anchor="start">Lua: unit → HELD with TTL + deadline</text>
+<text x="1857" y="565" font-family="Inter,Arial,sans-serif" font-size="15" font-weight="400" fill="#334155" text-anchor="start">Checkout: HELD → PAYING; return 202 + URL</text>
+<text x="1857" y="587" font-family="Inter,Arial,sans-serif" font-size="15" font-weight="400" fill="#334155" text-anchor="start">Same-slot outbox event</text>
+<text x="1857" y="609" font-family="Inter,Arial,sans-serif" font-size="15" font-weight="400" fill="#334155" text-anchor="start">Reaper never frees PAYING on timer evidence</text>
+<rect x="1250" y="470" width="500" height="190" rx="16" fill="#f1f5f9" stroke="#94a3b8" stroke-width="2"/>
+<circle cx="1281" cy="501" r="17" fill="#1d4ed8"/>
+<text x="1281" y="507" font-family="Inter,Arial,sans-serif" font-size="17" font-weight="700" fill="#ffffff" text-anchor="middle">8</text>
+<text x="1310" y="508" font-family="Inter,Arial,sans-serif" font-size="19" font-weight="700" fill="#17212f" text-anchor="start">OUTBOX RELAY</text>
+<text x="1272" y="543" font-family="Inter,Arial,sans-serif" font-size="15" font-weight="400" fill="#334155" text-anchor="start">One active lease owner per Redis stream</text>
+<text x="1272" y="565" font-family="Inter,Arial,sans-serif" font-size="15" font-weight="400" fill="#334155" text-anchor="start">Publish then ACK only after broker ACK</text>
+<text x="1272" y="587" font-family="Inter,Arial,sans-serif" font-size="15" font-weight="400" fill="#334155" text-anchor="start">Pending entries replayed after relay restart</text>
+<rect x="665" y="470" width="500" height="190" rx="16" fill="#f1f5f9" stroke="#94a3b8" stroke-width="2"/>
+<circle cx="696" cy="501" r="17" fill="#1d4ed8"/>
+<text x="696" y="507" font-family="Inter,Arial,sans-serif" font-size="17" font-weight="700" fill="#ffffff" text-anchor="middle">9</text>
+<text x="725" y="508" font-family="Inter,Arial,sans-serif" font-size="19" font-weight="700" fill="#17212f" text-anchor="start">KAFKA API EVENT LOG</text>
+<text x="687" y="543" font-family="Inter,Arial,sans-serif" font-size="15" font-weight="400" fill="#334155" text-anchor="start">12 partitions; partition key = order_id</text>
+<text x="687" y="565" font-family="Inter,Arial,sans-serif" font-size="15" font-weight="400" fill="#334155" text-anchor="start">Per-order ordering; at-least-once delivery</text>
+<text x="687" y="587" font-family="Inter,Arial,sans-serif" font-size="15" font-weight="400" fill="#334155" text-anchor="start">Retry → requeue → DLQ; offset after durable outcome</text>
+<rect x="80" y="470" width="500" height="190" rx="16" fill="#f0fdf4" stroke="#4ade80" stroke-width="2"/>
+<circle cx="111" cy="501" r="17" fill="#1d4ed8"/>
+<text x="111" y="507" font-family="Inter,Arial,sans-serif" font-size="17" font-weight="700" fill="#ffffff" text-anchor="middle">10</text>
+<text x="140" y="508" font-family="Inter,Arial,sans-serif" font-size="19" font-weight="700" fill="#17212f" text-anchor="start">ORDER WORKERS</text>
+<text x="102" y="543" font-family="Inter,Arial,sans-serif" font-size="15" font-weight="400" fill="#334155" text-anchor="start">Bulkhead + per-PSP-call token bucket</text>
+<text x="102" y="565" font-family="Inter,Arial,sans-serif" font-size="15" font-weight="400" fill="#334155" text-anchor="start">Create order/payment intent before PSP</text>
+<text x="102" y="587" font-family="Inter,Arial,sans-serif" font-size="15" font-weight="400" fill="#334155" text-anchor="start">Authorize + confirm; capture is separate</text>
+<polyline points="2412,565 2342,565" fill="none" stroke="#334155" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<polyline points="1827,565 1757,565" fill="none" stroke="#334155" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<polyline points="1242,565 1172,565" fill="none" stroke="#334155" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<polyline points="657,565 587,565" fill="none" stroke="#334155" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<rect x="80" y="720" width="500" height="190" rx="16" fill="#eff6ff" stroke="#60a5fa" stroke-width="2"/>
+<circle cx="111" cy="751" r="17" fill="#1d4ed8"/>
+<text x="111" y="757" font-family="Inter,Arial,sans-serif" font-size="17" font-weight="700" fill="#ffffff" text-anchor="middle">11</text>
+<text x="140" y="758" font-family="Inter,Arial,sans-serif" font-size="19" font-weight="700" fill="#17212f" text-anchor="start">POSTGRES: ORDER INTENT</text>
+<text x="102" y="793" font-family="Inter,Arial,sans-serif" font-size="15" font-weight="400" fill="#334155" text-anchor="start">Local WAL flush only: PENDING_PAYMENT + INTENT</text>
+<text x="102" y="815" font-family="Inter,Arial,sans-serif" font-size="15" font-weight="400" fill="#334155" text-anchor="start">Not yet cross-region durable or CONFIRMED</text>
+<text x="102" y="837" font-family="Inter,Arial,sans-serif" font-size="15" font-weight="400" fill="#334155" text-anchor="start">UNIQUE live (item_id, unit_id); ≤50K live owners/item</text>
+<text x="102" y="859" font-family="Inter,Arial,sans-serif" font-size="15" font-weight="400" fill="#334155" text-anchor="start">Unique conflict → CANCELLED; short-circuit, NEVER PSP</text>
+<rect x="665" y="720" width="500" height="190" rx="16" fill="#fff7ed" stroke="#f59e0b" stroke-width="2"/>
+<circle cx="696" cy="751" r="17" fill="#1d4ed8"/>
+<text x="696" y="757" font-family="Inter,Arial,sans-serif" font-size="17" font-weight="700" fill="#ffffff" text-anchor="middle">12</text>
+<text x="725" y="758" font-family="Inter,Arial,sans-serif" font-size="19" font-weight="700" fill="#17212f" text-anchor="start">PSP AUTHORIZE</text>
+<text x="687" y="793" font-family="Inter,Arial,sans-serif" font-size="15" font-weight="400" fill="#334155" text-anchor="start">Idempotency-Key = order_id</text>
+<text x="687" y="815" font-family="Inter,Arial,sans-serif" font-size="15" font-weight="400" fill="#334155" text-anchor="start">Metadata: item / unit / user / home region / epoch</text>
+<text x="687" y="837" font-family="Inter,Arial,sans-serif" font-size="15" font-weight="400" fill="#334155" text-anchor="start">≤1,400 auth calls/s; timeout = UNKNOWN</text>
+<text x="687" y="859" font-family="Inter,Arial,sans-serif" font-size="15" font-weight="400" fill="#334155" text-anchor="start">Query/retry same key; void before cancel/release</text>
+<rect x="1250" y="720" width="500" height="190" rx="16" fill="#eff6ff" stroke="#60a5fa" stroke-width="2"/>
+<circle cx="1281" cy="751" r="17" fill="#1d4ed8"/>
+<text x="1281" y="757" font-family="Inter,Arial,sans-serif" font-size="17" font-weight="700" fill="#ffffff" text-anchor="middle">13</text>
+<text x="1310" y="758" font-family="Inter,Arial,sans-serif" font-size="19" font-weight="700" fill="#17212f" text-anchor="start">CROSS-REGION SYNC ACK</text>
+<text x="1272" y="793" font-family="Inter,Arial,sans-serif" font-size="15" font-weight="400" fill="#334155" text-anchor="start">CAS AUTHORIZED + CONFIRMED only after PSP auth</text>
+<text x="1272" y="815" font-family="Inter,Arial,sans-serif" font-size="15" font-weight="400" fill="#334155" text-anchor="start">Remote standby WAL-flush ACK; primary + standby (2-of-2)</text>
+<text x="1272" y="837" font-family="Inter,Arial,sans-serif" font-size="15" font-weight="400" fill="#334155" text-anchor="start">No ACK → pause confirms and new admissions</text>
+<text x="1272" y="859" font-family="Inter,Arial,sans-serif" font-size="15" font-weight="400" fill="#334155" text-anchor="start">Expose/project CONFIRMED only after durable commit</text>
+<text x="1272" y="881" font-family="Inter,Arial,sans-serif" font-size="15" font-weight="400" fill="#334155" text-anchor="start">Pre-ACK region loss: REC rebuilds from PSP metadata; void orphan auth</text>
+<rect x="1835" y="720" width="500" height="190" rx="16" fill="#ecfdf5" stroke="#34d399" stroke-width="2"/>
+<circle cx="1866" cy="751" r="17" fill="#1d4ed8"/>
+<text x="1866" y="757" font-family="Inter,Arial,sans-serif" font-size="17" font-weight="700" fill="#ffffff" text-anchor="middle">14</text>
+<text x="1895" y="758" font-family="Inter,Arial,sans-serif" font-size="19" font-weight="700" fill="#17212f" text-anchor="start">FINALIZE INVENTORY</text>
+<text x="1857" y="793" font-family="Inter,Arial,sans-serif" font-size="15" font-weight="400" fill="#334155" text-anchor="start">After remote ACK: mark Redis unit sold; never re-offer</text>
+<text x="1857" y="815" font-family="Inter,Arial,sans-serif" font-size="15" font-weight="400" fill="#334155" text-anchor="start">Unique loser: short-circuit from 11; NEVER calls PSP</text>
+<text x="1857" y="837" font-family="Inter,Arial,sans-serif" font-size="15" font-weight="400" fill="#334155" text-anchor="start">Forfeit loser unit pending reconciliation</text>
+<text x="1857" y="859" font-family="Inter,Arial,sans-serif" font-size="15" font-weight="400" fill="#334155" text-anchor="start">Definitive decline/void: CANCELLED + safe release</text>
+<rect x="2420" y="720" width="500" height="190" rx="16" fill="#f8fafc" stroke="#94a3b8" stroke-width="2"/>
+<circle cx="2451" cy="751" r="17" fill="#1d4ed8"/>
+<text x="2451" y="757" font-family="Inter,Arial,sans-serif" font-size="17" font-weight="700" fill="#ffffff" text-anchor="middle">15</text>
+<text x="2480" y="758" font-family="Inter,Arial,sans-serif" font-size="19" font-weight="700" fill="#17212f" text-anchor="start">ORDER STATUS READ</text>
+<text x="2442" y="793" font-family="Inter,Arial,sans-serif" font-size="15" font-weight="400" fill="#334155" text-anchor="start">KV fast path; monotonic status version</text>
+<text x="2442" y="815" font-family="Inter,Arial,sans-serif" font-size="15" font-weight="400" fill="#334155" text-anchor="start">Miss/lag → authoritative PostgreSQL fallback</text>
+<text x="2442" y="837" font-family="Inter,Arial,sans-serif" font-size="15" font-weight="400" fill="#334155" text-anchor="start">Pre-order-row window → Redis PAYING/PROCESSING</text>
+<polyline points="587,815 657,815" fill="none" stroke="#334155" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<polyline points="1172,815 1242,815" fill="none" stroke="#334155" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<polyline points="1757,815 1827,815" fill="none" stroke="#334155" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<polyline points="2342,815 2412,815" fill="none" stroke="#334155" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<polyline points="580,706 2085.0,706" fill="none" stroke="#b45309" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)" stroke-dasharray="9 7"/>
+<rect x="1180.2" y="681" width="309.59999999999997" height="27" rx="8" fill="#ffffff" stroke="#cbd5e1" stroke-width="1"/>
+<text x="1335" y="700" font-family="Inter,Arial,sans-serif" font-size="13" font-weight="600" fill="#b45309" text-anchor="middle">unique conflict: cancel + bypass PSP</text>
+<polyline points="2670,414 2670,461" fill="none" stroke="#334155" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<rect x="2555.7" y="434" width="228.6" height="27" rx="8" fill="#ffffff" stroke="#cbd5e1" stroke-width="1"/>
+<text x="2670" y="453" font-family="Inter,Arial,sans-serif" font-size="13" font-weight="600" fill="#334155" text-anchor="middle">reserve / checkout request</text>
+<polyline points="330,664 330,711" fill="none" stroke="#334155" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<rect x="373.8" y="684" width="212.39999999999998" height="27" rx="8" fill="#ffffff" stroke="#cbd5e1" stroke-width="1"/>
+<text x="480" y="703" font-family="Inter,Arial,sans-serif" font-size="13" font-weight="600" fill="#334155" text-anchor="middle">durable order processing</text>
+<text x="70" y="1030" font-family="Inter,Arial,sans-serif" font-size="23" font-weight="700" fill="#17212f" text-anchor="start">DEPLOYMENT / FAILURE BOUNDARIES</text>
+<rect x="50" y="1060" width="1450" height="500" rx="22" fill="#f8fafc" stroke="#64748b" stroke-width="2"/>
+<text x="74" y="1098" font-family="Inter,Arial,sans-serif" font-size="21" font-weight="700" fill="#64748b" text-anchor="start">HOME REGION — SINGLE WRITER FOR THIS ITEM</text>
+<text x="74" y="1125" font-family="Inter,Arial,sans-serif" font-size="14" font-weight="400" fill="#475569" text-anchor="start">Two home-region AZs; stateless app replicas and leased workers in both; item ownership is fenced.</text>
+<rect x="80" y="1145" width="680" height="335" rx="22" fill="#ffffff" stroke="#94a3b8" stroke-width="2"/>
+<text x="104" y="1183" font-family="Inter,Arial,sans-serif" font-size="21" font-weight="700" fill="#94a3b8" text-anchor="start">AZ a — APP + WORKERS</text>
+<rect x="105" y="1220" width="295" height="175" rx="16" fill="#eff6ff" stroke="#60a5fa" stroke-width="2"/>
+<text x="127" y="1258" font-family="Inter,Arial,sans-serif" font-size="19" font-weight="700" fill="#17212f" text-anchor="start">APP TIER</text>
+<text x="127" y="1293" font-family="Inter,Arial,sans-serif" font-size="15" font-weight="400" fill="#334155" text-anchor="start">GW: offline token verification</text>
+<text x="127" y="1315" font-family="Inter,Arial,sans-serif" font-size="15" font-weight="400" fill="#334155" text-anchor="start">RES: reserve / checkout / status</text>
+<text x="127" y="1337" font-family="Inter,Arial,sans-serif" font-size="15" font-weight="400" fill="#334155" text-anchor="start">PWH: signed PSP webhook ingress</text>
+<rect x="425" y="1220" width="310" height="175" rx="16" fill="#ecfdf5" stroke="#34d399" stroke-width="2"/>
+<text x="447" y="1258" font-family="Inter,Arial,sans-serif" font-size="19" font-weight="700" fill="#17212f" text-anchor="start">WORKER TIER</text>
+<text x="447" y="1293" font-family="Inter,Arial,sans-serif" font-size="15" font-weight="400" fill="#334155" text-anchor="start">ADM / RLY / REAP / WRK</text>
+<text x="447" y="1315" font-family="Inter,Arial,sans-serif" font-size="15" font-weight="400" fill="#334155" text-anchor="start">CAP / REC; leased ownership</text>
+<text x="447" y="1337" font-family="Inter,Arial,sans-serif" font-size="15" font-weight="400" fill="#334155" text-anchor="start">No role pinned to AZ a</text>
+<rect x="790" y="1145" width="680" height="335" rx="22" fill="#ffffff" stroke="#94a3b8" stroke-width="2"/>
+<text x="814" y="1183" font-family="Inter,Arial,sans-serif" font-size="21" font-weight="700" fill="#94a3b8" text-anchor="start">AZ b — REPLICAS</text>
+<rect x="815" y="1220" width="295" height="175" rx="16" fill="#eff6ff" stroke="#60a5fa" stroke-width="2"/>
+<text x="837" y="1258" font-family="Inter,Arial,sans-serif" font-size="19" font-weight="700" fill="#17212f" text-anchor="start">APP REPLICAS</text>
+<text x="837" y="1293" font-family="Inter,Arial,sans-serif" font-size="15" font-weight="400" fill="#334155" text-anchor="start">Same gateway / reservation paths</text>
+<text x="837" y="1315" font-family="Inter,Arial,sans-serif" font-size="15" font-weight="400" fill="#334155" text-anchor="start">N+1 capacity; no AZ affinity</text>
+<text x="837" y="1337" font-family="Inter,Arial,sans-serif" font-size="15" font-weight="400" fill="#334155" text-anchor="start">Load-balanced from WAF</text>
+<rect x="1135" y="1220" width="310" height="175" rx="16" fill="#ecfdf5" stroke="#34d399" stroke-width="2"/>
+<text x="1157" y="1258" font-family="Inter,Arial,sans-serif" font-size="19" font-weight="700" fill="#17212f" text-anchor="start">WORKER REPLICAS</text>
+<text x="1157" y="1293" font-family="Inter,Arial,sans-serif" font-size="15" font-weight="400" fill="#334155" text-anchor="start">Same worker roles as AZ a</text>
+<text x="1157" y="1315" font-family="Inter,Arial,sans-serif" font-size="15" font-weight="400" fill="#334155" text-anchor="start">Lease / partition takeover</text>
+<text x="1157" y="1337" font-family="Inter,Arial,sans-serif" font-size="15" font-weight="400" fill="#334155" text-anchor="start">Higher fencing epoch required</text>
+<text x="90" y="1525" font-family="Inter,Arial,sans-serif" font-size="15" font-weight="400" fill="#475569" text-anchor="start">On AZ loss: surviving replicas take over only after lease + fencing checks; checkout / payment work remains idempotent.</text>
+<rect x="1530" y="1060" width="1420" height="500" rx="22" fill="#eff6ff" stroke="#2563eb" stroke-width="2"/>
+<text x="1554" y="1098" font-family="Inter,Arial,sans-serif" font-size="21" font-weight="700" fill="#2563eb" text-anchor="start">DATA TIER — MULTI-AZ FAILURE BOUNDARY</text>
+<text x="1554" y="1125" font-family="Inter,Arial,sans-serif" font-size="14" font-weight="400" fill="#475569" text-anchor="start">Inventory, admission control, durable ownership, event log and projections have separate responsibilities.</text>
+<rect x="1560" y="1145" width="420" height="130" rx="16" fill="#f8fbff" stroke="#60a5fa" stroke-width="2"/>
+<text x="1582" y="1183" font-family="Inter,Arial,sans-serif" font-size="19" font-weight="700" fill="#17212f" text-anchor="start">REDIS INVENTORY</text>
+<text x="1582" y="1218" font-family="Inter,Arial,sans-serif" font-size="15" font-weight="400" fill="#334155" text-anchor="start">unit tokens, holds, deadlines</text>
+<text x="1582" y="1240" font-family="Inter,Arial,sans-serif" font-size="15" font-weight="400" fill="#334155" text-anchor="start">same-slot Lua + per-shard outbox</text>
+<text x="1582" y="1262" font-family="Inter,Arial,sans-serif" font-size="15" font-weight="400" fill="#334155" text-anchor="start">isolated inventory shard keys</text>
+<rect x="2010" y="1145" width="420" height="130" rx="16" fill="#f0fdfa" stroke="#0f766e" stroke-width="2"/>
+<text x="2032" y="1183" font-family="Inter,Arial,sans-serif" font-size="19" font-weight="700" fill="#17212f" text-anchor="start">HA ADMISSION CONTROL</text>
+<text x="2032" y="1218" font-family="Inter,Arial,sans-serif" font-size="15" font-weight="400" fill="#334155" text-anchor="start">dedicated replicated CTRL keyspace</text>
+<text x="2032" y="1240" font-family="Inter,Arial,sans-serif" font-size="15" font-weight="400" fill="#334155" text-anchor="start">stock + 3-state watermark; admission gate</text>
+<text x="2032" y="1262" font-family="Inter,Arial,sans-serif" font-size="15" font-weight="400" fill="#334155" text-anchor="start">PSP capacity + remote standby ACK health</text>
+<rect x="2460" y="1145" width="420" height="130" rx="16" fill="#f8fbff" stroke="#60a5fa" stroke-width="2"/>
+<text x="2482" y="1183" font-family="Inter,Arial,sans-serif" font-size="19" font-weight="700" fill="#17212f" text-anchor="start">KAFKA API LOG</text>
+<text x="2482" y="1218" font-family="Inter,Arial,sans-serif" font-size="15" font-weight="400" fill="#334155" text-anchor="start">12 partitions by order_id</text>
+<text x="2482" y="1240" font-family="Inter,Arial,sans-serif" font-size="15" font-weight="400" fill="#334155" text-anchor="start">per-order ordering; at-least-once</text>
+<text x="2482" y="1262" font-family="Inter,Arial,sans-serif" font-size="15" font-weight="400" fill="#334155" text-anchor="start">offset after durable handling / DLQ</text>
+<rect x="1560" y="1285" width="420" height="130" rx="16" fill="#f8fbff" stroke="#60a5fa" stroke-width="2"/>
+<text x="1582" y="1323" font-family="Inter,Arial,sans-serif" font-size="19" font-weight="700" fill="#17212f" text-anchor="start">POSTGRES + POOLER</text>
+<text x="1582" y="1358" font-family="Inter,Arial,sans-serif" font-size="15" font-weight="400" fill="#334155" text-anchor="start">orders, payments, durable idempotency</text>
+<text x="1582" y="1380" font-family="Inter,Arial,sans-serif" font-size="15" font-weight="400" fill="#334155" text-anchor="start">CAS + UNIQUE live (item_id, unit_id)</text>
+<text x="1582" y="1402" font-family="Inter,Arial,sans-serif" font-size="15" font-weight="400" fill="#334155" text-anchor="start">≤50K simultaneous live owners per hot item</text>
+<rect x="2010" y="1285" width="420" height="130" rx="16" fill="#f8fbff" stroke="#60a5fa" stroke-width="2"/>
+<text x="2032" y="1323" font-family="Inter,Arial,sans-serif" font-size="19" font-weight="700" fill="#17212f" text-anchor="start">KEY-VALUE READ MODEL</text>
+<text x="2032" y="1358" font-family="Inter,Arial,sans-serif" font-size="15" font-weight="400" fill="#334155" text-anchor="start">versioned order/payment status</text>
+<text x="2032" y="1380" font-family="Inter,Arial,sans-serif" font-size="15" font-weight="400" fill="#334155" text-anchor="start">catalog documents</text>
+<text x="2032" y="1402" font-family="Inter,Arial,sans-serif" font-size="15" font-weight="400" fill="#334155" text-anchor="start">projection only; not payment authority</text>
+<rect x="2460" y="1285" width="420" height="130" rx="16" fill="#f8fbff" stroke="#60a5fa" stroke-width="2"/>
+<text x="2482" y="1323" font-family="Inter,Arial,sans-serif" font-size="19" font-weight="700" fill="#17212f" text-anchor="start">DLQ</text>
+<text x="2482" y="1358" font-family="Inter,Arial,sans-serif" font-size="15" font-weight="400" fill="#334155" text-anchor="start">after bounded retries / requeue</text>
+<text x="2482" y="1380" font-family="Inter,Arial,sans-serif" font-size="15" font-weight="400" fill="#334155" text-anchor="start">REC triage; audited replay</text>
+<text x="2482" y="1402" font-family="Inter,Arial,sans-serif" font-size="15" font-weight="400" fill="#334155" text-anchor="start">no blind automatic replay</text>
+<rect x="1560" y="1425" width="420" height="130" rx="16" fill="#f8fbff" stroke="#60a5fa" stroke-width="2"/>
+<text x="1582" y="1463" font-family="Inter,Arial,sans-serif" font-size="19" font-weight="700" fill="#17212f" text-anchor="start">ANALYTICS STORE</text>
+<text x="1582" y="1498" font-family="Inter,Arial,sans-serif" font-size="15" font-weight="400" fill="#334155" text-anchor="start">columnar lifecycle aggregates</text>
+<text x="1582" y="1520" font-family="Inter,Arial,sans-serif" font-size="15" font-weight="400" fill="#334155" text-anchor="start">fed asynchronously from event log</text>
+<text x="1582" y="1542" font-family="Inter,Arial,sans-serif" font-size="15" font-weight="400" fill="#334155" text-anchor="start">isolated from checkout</text>
+<text x="70" y="1625" font-family="Inter,Arial,sans-serif" font-size="23" font-weight="700" fill="#17212f" text-anchor="start">SUPPORTING FLOWS, EXTERNAL SYSTEMS AND RECOVERY</text>
+<rect x="50" y="1655" width="700" height="640" rx="22" fill="#fff7ed" stroke="#b7791f" stroke-width="2"/>
+<text x="74" y="1693" font-family="Inter,Arial,sans-serif" font-size="21" font-weight="700" fill="#b7791f" text-anchor="start">EXTERNAL PSP — FAILURE BOUNDARY</text>
+<rect x="75" y="1750" width="310" height="185" rx="16" fill="#ffffff" stroke="#f59e0b" stroke-width="2"/>
+<text x="97" y="1788" font-family="Inter,Arial,sans-serif" font-size="19" font-weight="700" fill="#17212f" text-anchor="start">PSP</text>
+<text x="97" y="1823" font-family="Inter,Arial,sans-serif" font-size="15" font-weight="400" fill="#334155" text-anchor="start">rate limited; timeout / lost response</text>
+<text x="97" y="1845" font-family="Inter,Arial,sans-serif" font-size="15" font-weight="400" fill="#334155" text-anchor="start">authorize / capture / void / query</text>
+<text x="97" y="1867" font-family="Inter,Arial,sans-serif" font-size="15" font-weight="400" fill="#334155" text-anchor="start">idempotency contract is required</text>
+<rect x="415" y="1750" width="310" height="185" rx="16" fill="#ffffff" stroke="#f59e0b" stroke-width="2"/>
+<text x="437" y="1788" font-family="Inter,Arial,sans-serif" font-size="19" font-weight="700" fill="#17212f" text-anchor="start">WEBHOOK INGRESS</text>
+<text x="437" y="1823" font-family="Inter,Arial,sans-serif" font-size="15" font-weight="400" fill="#334155" text-anchor="start">PSP → WAF → PWH → event log</text>
+<text x="437" y="1845" font-family="Inter,Arial,sans-serif" font-size="15" font-weight="400" fill="#334155" text-anchor="start">signature + timestamp verification</text>
+<text x="437" y="1867" font-family="Inter,Arial,sans-serif" font-size="15" font-weight="400" fill="#334155" text-anchor="start">dedupe event ID; bypass waiting room</text>
+<text x="75" y="1990" font-family="Inter,Arial,sans-serif" font-size="15" font-weight="400" fill="#334155" text-anchor="start">Polling by the same idempotency key is the fallback for</text>
+<text x="75" y="2014" font-family="Inter,Arial,sans-serif" font-size="15" font-weight="400" fill="#334155" text-anchor="start">missing or late callbacks. PSP timeout is UNKNOWN, never decline.</text>
+<rect x="775" y="1655" width="700" height="640" rx="22" fill="#f0fdf4" stroke="#16a34a" stroke-width="2"/>
+<text x="799" y="1693" font-family="Inter,Arial,sans-serif" font-size="21" font-weight="700" fill="#16a34a" text-anchor="start">CAPTURE + HOLD LIFECYCLE</text>
+<rect x="800" y="1750" width="310" height="185" rx="16" fill="#ffffff" stroke="#4ade80" stroke-width="2"/>
+<text x="822" y="1788" font-family="Inter,Arial,sans-serif" font-size="19" font-weight="700" fill="#17212f" text-anchor="start">CAPTURE SWEEPER</text>
+<text x="822" y="1823" font-family="Inter,Arial,sans-serif" font-size="15" font-weight="400" fill="#334155" text-anchor="start">DB: CONFIRMED + AUTHORIZED</text>
+<text x="822" y="1845" font-family="Inter,Arial,sans-serif" font-size="15" font-weight="400" fill="#334155" text-anchor="start">deferred idempotent capture</text>
+<text x="822" y="1867" font-family="Inter,Arial,sans-serif" font-size="15" font-weight="400" fill="#334155" text-anchor="start">per-call PSP token bucket</text>
+<rect x="1140" y="1750" width="310" height="185" rx="16" fill="#ffffff" stroke="#4ade80" stroke-width="2"/>
+<text x="1162" y="1788" font-family="Inter,Arial,sans-serif" font-size="19" font-weight="700" fill="#17212f" text-anchor="start">HOLD REAPER</text>
+<text x="1162" y="1823" font-family="Inter,Arial,sans-serif" font-size="15" font-weight="400" fill="#334155" text-anchor="start">expired HELD → release to sale</text>
+<text x="1162" y="1845" font-family="Inter,Arial,sans-serif" font-size="15" font-weight="400" fill="#334155" text-anchor="start">PAYING → HoldPayOverdue</text>
+<text x="1162" y="1867" font-family="Inter,Arial,sans-serif" font-size="15" font-weight="400" fill="#334155" text-anchor="start">Redis outbox → RLY → Kafka → WRK/REC</text>
+<text x="1162" y="1889" font-family="Inter,Arial,sans-serif" font-size="15" font-weight="400" fill="#334155" text-anchor="start">never release PAYING on timer</text>
+<text x="800" y="1990" font-family="Inter,Arial,sans-serif" font-size="14" font-weight="400" fill="#334155" text-anchor="start">WRK → dedicated HA CTRL breaker/capacity → ADM → watermark;</text>
+<text x="800" y="2013" font-family="Inter,Arial,sans-serif" font-size="14" font-weight="400" fill="#334155" text-anchor="start">DB publishes standby-ACK health; stale/missing health pauses new admits.</text>
+<text x="800" y="2036" font-family="Inter,Arial,sans-serif" font-size="14" font-weight="400" fill="#334155" text-anchor="start">MEM publishes stock summary into CTRL; inventory shards stay separate.</text>
+<text x="800" y="2059" font-family="Inter,Arial,sans-serif" font-size="14" font-weight="400" fill="#334155" text-anchor="start">KV: PENDING after local DB commit; CONFIRMED after remote ACK;</text>
+<text x="800" y="2082" font-family="Inter,Arial,sans-serif" font-size="14" font-weight="400" fill="#334155" text-anchor="start">CANCELLED after definitive failure; CAPTURED after CAP DB CAS.</text>
+<rect x="1500" y="1655" width="700" height="640" rx="22" fill="#f8fafc" stroke="#64748b" stroke-width="2"/>
+<text x="1524" y="1693" font-family="Inter,Arial,sans-serif" font-size="21" font-weight="700" fill="#64748b" text-anchor="start">DLQ + RECONCILIATION</text>
+<rect x="1525" y="1750" width="310" height="185" rx="16" fill="#ffffff" stroke="#94a3b8" stroke-width="2"/>
+<text x="1547" y="1788" font-family="Inter,Arial,sans-serif" font-size="19" font-weight="700" fill="#17212f" text-anchor="start">DLQ ROUTE</text>
+<text x="1547" y="1823" font-family="Inter,Arial,sans-serif" font-size="15" font-weight="400" fill="#334155" text-anchor="start">worker bounded retry → requeue → DLQ</text>
+<text x="1547" y="1845" font-family="Inter,Arial,sans-serif" font-size="15" font-weight="400" fill="#334155" text-anchor="start">REC monitors and triages</text>
+<text x="1547" y="1867" font-family="Inter,Arial,sans-serif" font-size="15" font-weight="400" fill="#334155" text-anchor="start">replay only after remediation</text>
+<rect x="1865" y="1750" width="310" height="185" rx="16" fill="#ffffff" stroke="#94a3b8" stroke-width="2"/>
+<text x="1887" y="1788" font-family="Inter,Arial,sans-serif" font-size="19" font-weight="700" fill="#17212f" text-anchor="start">RECONCILER</text>
+<text x="1887" y="1823" font-family="Inter,Arial,sans-serif" font-size="15" font-weight="400" fill="#334155" text-anchor="start">compare Redis / DB / PSP ledger</text>
+<text x="1887" y="1845" font-family="Inter,Arial,sans-serif" font-size="15" font-weight="400" fill="#334155" text-anchor="start">detect orphans, duplicates, stuck holds</text>
+<text x="1887" y="1867" font-family="Inter,Arial,sans-serif" font-size="15" font-weight="400" fill="#334155" text-anchor="start">fix only stale, terminal-safe records</text>
+<text x="1525" y="1990" font-family="Inter,Arial,sans-serif" font-size="15" font-weight="400" fill="#334155" text-anchor="start">HoldPayOverdue and failed payment events are resolved against</text>
+<text x="1525" y="2014" font-family="Inter,Arial,sans-serif" font-size="15" font-weight="400" fill="#334155" text-anchor="start">durable order/payment state and PSP truth before release.</text>
+<rect x="2225" y="1655" width="700" height="640" rx="22" fill="#f0fdfa" stroke="#0f766e" stroke-width="2"/>
+<text x="2249" y="1693" font-family="Inter,Arial,sans-serif" font-size="21" font-weight="700" fill="#0f766e" text-anchor="start">REMOTE REGIONS + STANDBY + TELEMETRY</text>
+<rect x="2250" y="1750" width="310" height="185" rx="16" fill="#ffffff" stroke="#2dd4bf" stroke-width="2"/>
+<text x="2272" y="1788" font-family="Inter,Arial,sans-serif" font-size="19" font-weight="700" fill="#17212f" text-anchor="start">OTHER REGIONS</text>
+<text x="2272" y="1823" font-family="Inter,Arial,sans-serif" font-size="15" font-weight="400" fill="#334155" text-anchor="start">edge / waiting room / reads local</text>
+<text x="2272" y="1845" font-family="Inter,Arial,sans-serif" font-size="15" font-weight="400" fill="#334155" text-anchor="start">all writes forward to home gateway</text>
+<text x="2272" y="1867" font-family="Inter,Arial,sans-serif" font-size="15" font-weight="400" fill="#334155" text-anchor="start">item route + fencing epoch</text>
+<rect x="2590" y="1750" width="310" height="185" rx="16" fill="#ffffff" stroke="#2dd4bf" stroke-width="2"/>
+<text x="2612" y="1788" font-family="Inter,Arial,sans-serif" font-size="19" font-weight="700" fill="#17212f" text-anchor="start">STANDBY REGION</text>
+<text x="2612" y="1823" font-family="Inter,Arial,sans-serif" font-size="15" font-weight="400" fill="#334155" text-anchor="start">PostgreSQL synchronous standby</text>
+<text x="2612" y="1845" font-family="Inter,Arial,sans-serif" font-size="15" font-weight="400" fill="#334155" text-anchor="start">remote WAL-flush ACK required</text>
+<text x="2612" y="1867" font-family="Inter,Arial,sans-serif" font-size="15" font-weight="400" fill="#334155" text-anchor="start">RPO 0 for acknowledged CONFIRMED</text>
+<text x="2612" y="1889" font-family="Inter,Arial,sans-serif" font-size="15" font-weight="400" fill="#334155" text-anchor="start">Kafka log replica is asynchronous</text>
+<text x="2250" y="1990" font-family="Inter,Arial,sans-serif" font-size="14" font-weight="400" fill="#334155" text-anchor="start">Primary + one remote standby are both required (2-of-2), not majority quorum.</text>
+<text x="2250" y="2013" font-family="Inter,Arial,sans-serif" font-size="14" font-weight="400" fill="#334155" text-anchor="start">WAN/standby ACK loss pauses confirmations and new admission tokens.</text>
+<text x="2250" y="2036" font-family="Inter,Arial,sans-serif" font-size="14" font-weight="400" fill="#334155" text-anchor="start">PAUSED preserves queue place; browse remains available.</text>
+<text x="2250" y="2059" font-family="Inter,Arial,sans-serif" font-size="14" font-weight="400" fill="#334155" text-anchor="start">PAYING holds stay locked; REAP emits HoldPayOverdue via Redis outbox,</text>
+<text x="2250" y="2082" font-family="Inter,Arial,sans-serif" font-size="14" font-weight="400" fill="#334155" text-anchor="start">then RLY -&gt; Kafka -&gt; WRK/REC; PAYING is never timer-released.</text>
+<text x="2250" y="2105" font-family="Inter,Arial,sans-serif" font-size="14" font-weight="400" fill="#334155" text-anchor="start">Step-11 INTENT is local WAL only, not remote durable.</text>
+<text x="2250" y="2128" font-family="Inter,Arial,sans-serif" font-size="14" font-weight="400" fill="#334155" text-anchor="start">On region loss after PSP auth but before step-13 ACK:</text>
+<text x="2250" y="2151" font-family="Inter,Arial,sans-serif" font-size="14" font-weight="400" fill="#334155" text-anchor="start">fence old writer; acquire higher epoch; query PSP by idempotency key.</text>
+<text x="2250" y="2174" font-family="Inter,Arial,sans-serif" font-size="14" font-weight="400" fill="#334155" text-anchor="start">Recover metadata; verify standby commit; reconstruct missing recovery record.</text>
+<text x="2250" y="2197" font-family="Inter,Arial,sans-serif" font-size="14" font-weight="400" fill="#334155" text-anchor="start">Void orphan auth; reconcile DB / PSP ledger / inventory before reopening.</text>
+<text x="2250" y="2220" font-family="Inter,Arial,sans-serif" font-size="14" font-weight="400" fill="#334155" text-anchor="start">PSP metadata must be queryable by key; OTel / Prometheus never gates sale.</text>
+<text x="70" y="2340" font-family="Inter,Arial,sans-serif" font-size="15" font-weight="600" fill="#475569" text-anchor="start">Strict invariants: no duplicate live unit owner • no duplicate PSP effect per idempotency key • CONFIRMED only after remote WAL flush ACK • failures prefer temporary undersell.</text>
+</svg>

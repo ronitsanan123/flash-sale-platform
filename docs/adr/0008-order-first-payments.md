@@ -1,0 +1,29 @@
+# ADR 0008: Order-first payment orchestration and PSP idempotency
+
+- **Status:** Accepted
+
+## Context
+
+The previous drop experienced charges without orders, duplicate payment effects and ambiguous PSP timeouts. The system must create an order/payment intent before calling the PSP, use a stable idempotency key, make state transitions replay-safe, and avoid releasing an inventory hold while an authorization could still land.
+
+## Decision
+
+1. **Order first:** Create `PENDING_PAYMENT` + `INTENT` in PostgreSQL before the PSP call. Step-11 intent is local-WAL durable (`synchronous_commit=local`) and is not yet cross-region durable or customer-visible `CONFIRMED`.
+2. **Stable key and metadata:** Use `order_id` as the PSP idempotency key. Every PSP request carries `order_id`, `item_id`, `unit_id`, `user_id`, `home_region` and `fencing_epoch` metadata. Do not generate a new key for a retry of the same attempt.
+3. **Absorbing states:** `CONFIRMED` and `CANCELLED` are absorbing. A unique-live-unit guard loser is persisted as `order=CANCELLED`, `payment=NOT_ATTEMPTED`, `inventory_disposition=FORFEIT`; its `PAYING` hold may be forfeited only with `ForfeitProofNotAttempted`, because the unique guard short-circuits before any PSP call. Ordinary definitive decline/void uses `Release`; a different `PAYING` hold may be forfeited after a definitive, durably recorded PSP decline/void only when a separate integrity decision requires permanent quarantine. `AUTHORIZED`, `UNKNOWN` or ambiguous payment outcomes must be resolved/voided before Forfeit. The terminal record is committed before the event is acknowledged. A redelivered `CheckoutRequested` for `CANCELLED` repairs its persisted inventory disposition (`FORFEIT`, `RELEASE`, `SOLD` or `NONE`) and KV projection, then acknowledges without a PSP call. A redelivered event for `CONFIRMED` repairs Redis/KV and acknowledges without a PSP call. Tests assert zero PSP invocations for either absorbing state. `AUTHORIZED`/`CAPTURED` payment states skip authorization; `FAILED`/`VOIDED` are terminal; `UNKNOWN` is resolved by known-key lookup and never treated as decline.
+4. **Fenced, versioned writes:** Every order/payment write transaction locks and validates the current `region_leases` epoch. `orders.version` is the aggregate monotonic projection version. Increment exactly once for each committed aggregate-state transition; if order and payment rows change together in one atomic transaction, increment once for that aggregate transaction, not once per row. KV events carry order status, payment status and inventory disposition with the version. `orders.fencing_epoch` records the latest accepted writer epoch; payment attempts retain their request epoch. KV projection events carry `(order_id, version, order_status, payment_status, inventory_disposition)` and accept only a strictly newer order version; an identical same-version replay is a no-op, while conflicting content at the same version is an invariant violation.
+5. **Authorize, confirm, capture:** Authorize with bounded timeout and per-call token budget. Only after definitive authorization does the worker CAS `order=CONFIRMED` and `payment=AUTHORIZED`, using PostgreSQL synchronous primary + remote standby WAL-flush acknowledgement (`synchronous_commit=on`, 2-of-2). Redis is marked sold and `CONFIRMED` projected only after that commit returns. Capture is a separate idempotent sweeper and changes payment to `CAPTURED` with another aggregate version increment.
+6. **PSP void/tombstone capability:** The mock PSP supports definitive void-by-idempotency-key tombstoning: after a confirmed void, a late/retried authorization with the same key is rejected. A production PSP may use this stronger cancellation path only if its contract guarantees equivalent behaviour and it is contract-tested.
+7. **No-tombstone PSP fallback:** If a PSP cannot guarantee that void definitively prevents late authorization, do not cancel/release unresolved `UNKNOWN` attempts merely because the idempotency window expired. Keep the order/payment `UNKNOWN`, the hold `PAYING`, and admissions paused for the item until a definitive webhook/status/ledger result or provider-guaranteed authorization-finality boundary proves no late authorization can land. If the provider offers no such finality guarantee, the order remains quarantined for operator/provider resolution; inventory is not returned to sale.
+8. **Worker replay:** A replay validates immutable order identity first. `CANCELLED` and `CONFIRMED` short-circuit before PSP; `AUTHORIZED`/`CAPTURED` skip authorization; `FAILED`/`VOIDED` follow terminal cancellation; `UNKNOWN` performs key lookup; only `INTENT` can start/continue the same-key authorization operation. Persist terminal inventory disposition (`FORFEIT`, `RELEASE`, `SOLD`, or `NONE`) so redelivery applies the same outcome.
+
+## Alternatives
+
+- Charge before order creation (rejected: can produce orphan charges).
+- Generate a new idempotency key per retry (rejected: can create duplicate effects).
+- Release on timeout or idempotency-window expiry (rejected: timeout is unknown and expiry is not proof of finality).
+- Capture synchronously in the order-worker hot path (rejected: consumes PSP quota during the spike and couples confirmation to capture latency).
+
+## Consequences
+
+PostgreSQL is authoritative for order/payment state, the PSP ledger is authoritative for external payment effects, and Redis/KV are repairable projections. Some holds remain `PAYING` longer while provider outcomes are ambiguous; this deliberately prefers temporary underselling to duplicate charge or sale. Production PSP selection must verify idempotency, lookup, void/tombstone and finality semantics rather than assuming all providers behave like the mock. The synchronous standby ACK is required before customer-visible `CONFIRMED`; the local prototype's simulated gate is not proof of actual cross-region replication.

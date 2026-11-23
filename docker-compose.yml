@@ -1,0 +1,379 @@
+name: flash-sale-platform
+
+x-redis-cluster-common: &redis-cluster-common
+  image: redis:7.4.2-alpine
+  restart: unless-stopped
+  networks: [flashsale]
+  healthcheck:
+    test: ["CMD", "redis-cli", "ping"]
+    interval: 3s
+    timeout: 2s
+    retries: 30
+
+services:
+  redis-inventory-1:
+    <<: *redis-cluster-common
+    hostname: redis-inventory-1
+    environment: { REDIS_CLUSTER_ANNOUNCE_HOST: redis-inventory-1 }
+    volumes: [redis-inventory-1:/data]
+    command:
+      - redis-server
+      - --port
+      - "6379"
+      - --cluster-enabled
+      - "yes"
+      - --cluster-config-file
+      - nodes.conf
+      - --cluster-node-timeout
+      - "5000"
+      - --appendonly
+      - "yes"
+      - --cluster-announce-hostname
+      - redis-inventory-1
+      - --cluster-preferred-endpoint-type
+      - hostname
+      - --cluster-announce-port
+      - "6379"
+      - --cluster-announce-bus-port
+      - "16379"
+  redis-inventory-2:
+    <<: *redis-cluster-common
+    hostname: redis-inventory-2
+    environment: { REDIS_CLUSTER_ANNOUNCE_HOST: redis-inventory-2 }
+    volumes: [redis-inventory-2:/data]
+    command:
+      - redis-server
+      - --port
+      - "6379"
+      - --cluster-enabled
+      - "yes"
+      - --cluster-config-file
+      - nodes.conf
+      - --cluster-node-timeout
+      - "5000"
+      - --appendonly
+      - "yes"
+      - --cluster-announce-hostname
+      - redis-inventory-2
+      - --cluster-preferred-endpoint-type
+      - hostname
+      - --cluster-announce-port
+      - "6379"
+      - --cluster-announce-bus-port
+      - "16379"
+  redis-inventory-3:
+    <<: *redis-cluster-common
+    hostname: redis-inventory-3
+    environment: { REDIS_CLUSTER_ANNOUNCE_HOST: redis-inventory-3 }
+    volumes: [redis-inventory-3:/data]
+    command:
+      - redis-server
+      - --port
+      - "6379"
+      - --cluster-enabled
+      - "yes"
+      - --cluster-config-file
+      - nodes.conf
+      - --cluster-node-timeout
+      - "5000"
+      - --appendonly
+      - "yes"
+      - --cluster-announce-hostname
+      - redis-inventory-3
+      - --cluster-preferred-endpoint-type
+      - hostname
+      - --cluster-announce-port
+      - "6379"
+      - --cluster-announce-bus-port
+      - "16379"
+
+  redis-cluster-init:
+    image: redis:7.4.2-alpine
+    networks: [flashsale]
+    depends_on:
+      redis-inventory-1: { condition: service_healthy }
+      redis-inventory-2: { condition: service_healthy }
+      redis-inventory-3: { condition: service_healthy }
+    entrypoint: ["/bin/sh", "-ec"]
+    command:
+      - |
+        if redis-cli -h redis-inventory-1 cluster info 2>/dev/null | grep -q 'cluster_state:ok'; then
+          echo 'Redis Cluster already initialized'; exit 0;
+        fi
+        redis-cli --cluster create redis-inventory-1:6379 redis-inventory-2:6379 redis-inventory-3:6379 --cluster-replicas 0 --cluster-yes
+        for i in $(seq 1 30); do
+          redis-cli -h redis-inventory-1 cluster info | grep -q 'cluster_state:ok' && exit 0
+          sleep 1
+        done
+        echo 'Redis Cluster did not become healthy' >&2; exit 1
+    restart: "no"
+
+  redis-ctrl:
+    restart: unless-stopped
+    image: redis:7.4.2-alpine
+    hostname: redis-ctrl
+    networks: [flashsale]
+    command: ["redis-server", "--appendonly", "yes", "--maxmemory", "128mb", "--maxmemory-policy", "noeviction"]
+    healthcheck: { test: ["CMD", "redis-cli", "ping"], interval: 3s, timeout: 2s, retries: 30 }
+
+  redis-kv:
+    restart: unless-stopped
+    image: redis:7.4.2-alpine
+    hostname: redis-kv
+    networks: [flashsale]
+    command: ["redis-server", "--appendonly", "yes", "--maxmemory", "256mb", "--maxmemory-policy", "allkeys-lru"]
+    healthcheck: { test: ["CMD", "redis-cli", "ping"], interval: 3s, timeout: 2s, retries: 30 }
+
+  postgres:
+    restart: unless-stopped
+    image: postgres:16.4-bookworm
+    hostname: postgres
+    networks: [flashsale]
+    environment:
+      POSTGRES_DB: flashsale
+      POSTGRES_USER: flashsale
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./prototype/migrations:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U flashsale -d flashsale"]
+      interval: 3s
+      timeout: 2s
+      retries: 30
+
+  redpanda:
+    restart: unless-stopped
+    image: docker.redpanda.com/redpandadata/redpanda:v25.1.1
+    hostname: redpanda
+    networks: [flashsale]
+    command:
+      - redpanda
+      - start
+      - --mode
+      - dev-container
+      - --smp
+      - "1"
+      - --memory
+      - 1G
+      - --reserve-memory
+      - 0M
+      - --overprovisioned
+      - --node-id
+      - "0"
+      - --kafka-addr
+      - internal://0.0.0.0:9092
+      - --advertise-kafka-addr
+      - internal://redpanda:9092
+      - --rpc-addr
+      - 0.0.0.0:33145
+      - --advertise-rpc-addr
+      - redpanda:33145
+      - --http-proxy-addr
+      - 0.0.0.0:8082
+      - --schema-registry-addr
+      - 0.0.0.0:8081
+    healthcheck:
+      test: ["CMD", "rpk", "cluster", "health", "--brokers", "redpanda:9092"]
+      interval: 5s
+      timeout: 5s
+      retries: 40
+
+  redpanda-setup:
+    image: docker.redpanda.com/redpandadata/redpanda:v25.1.1
+    networks: [flashsale]
+    depends_on:
+      redpanda: { condition: service_healthy }
+    entrypoint: ["/bin/sh", "-ec"]
+    command:
+      - |
+        rpk topic create checkout-events --brokers redpanda:9092 --partitions 12 --replicas 1 || true
+        rpk topic create checkout-events-retry --brokers redpanda:9092 --partitions 12 --replicas 1 || true
+        rpk topic create checkout-events-dlq --brokers redpanda:9092 --partitions 12 --replicas 1 || true
+    restart: "no"
+
+  integration:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: integration
+    working_dir: /workspace
+    networks: [flashsale]
+    environment:
+      CGO_ENABLED: "1"
+      REDIS_CLUSTER_SEEDS: redis-inventory-1:6379,redis-inventory-2:6379,redis-inventory-3:6379
+      REDIS_CTRL_ADDR: redis-ctrl:6379
+      REDIS_KV_ADDR: redis-kv:6379
+      DATABASE_URL: postgres://flashsale:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}@postgres:5432/flashsale?sslmode=disable
+      REDPANDA_HTTP_URL: http://redpanda:8082
+      PSP_URL: http://mockpsp:8090
+      HOME_REGION: ${HOME_REGION:-local-region}
+      REGION_WRITER_ID: ${REGION_WRITER_ID:-local-region-primary}
+      LEASE_EPOCH: ${LEASE_EPOCH:-1}
+      SIMULATE_STANDBY_ACK: "true"
+      ADMISSION_SIGNING_KEY_ID: ${ADMISSION_SIGNING_KEY_ID:-admission-v1}
+      ADMISSION_SIGNING_KEY: ${ADMISSION_SIGNING_KEY:?Set ADMISSION_SIGNING_KEY in .env}
+      PSP_WEBHOOK_SECRET: ${PSP_WEBHOOK_SECRET:?Set PSP_WEBHOOK_SECRET in .env}
+    depends_on:
+      redis-cluster-init: { condition: service_completed_successfully }
+      redis-ctrl: { condition: service_healthy }
+      redis-kv: { condition: service_healthy }
+      postgres: { condition: service_healthy }
+      redpanda-setup: { condition: service_completed_successfully }
+    command: ["sleep", "infinity"]
+    profiles: [test]
+
+  k6:
+    image: grafana/k6:0.54.0
+    networks: [flashsale]
+    working_dir: /scripts
+    volumes:
+      - ./loadtest:/scripts:ro
+    environment:
+      BASE_URL: ${K6_BASE_URL:-http://flashsale:8080}
+      PROFILE: ${K6_PROFILE:-spike}
+      TARGET_RPS: ${K6_TARGET_RPS:-1750}
+      ITEM_ID: ${ITEM_ID:-flash-sale-demo}
+      ADMIN_TOKEN: ${ADMIN_TOKEN:?Set ADMIN_TOKEN in .env}
+    command: ["run", "/scripts/flash.js"]
+    depends_on:
+      flashsale: { condition: service_healthy }
+    profiles: [loadtest]
+
+  flashsale:
+    restart: unless-stopped
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: runtime
+    hostname: flashsale
+    networks: [flashsale]
+    environment:
+      MODE: distributed
+      HTTP_ADDR: ":8080"
+      DATABASE_URL: postgres://flashsale:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}@postgres:5432/flashsale?sslmode=disable
+      DB_POOL_SIZE: "8"
+      REDIS_CLUSTER_SEEDS: redis-inventory-1:6379,redis-inventory-2:6379,redis-inventory-3:6379
+      REDIS_CTRL_ADDR: redis-ctrl:6379
+      REDIS_KV_ADDR: redis-kv:6379
+      REDPANDA_HTTP_URL: http://redpanda:8082
+      PSP_URL: http://mockpsp:8090
+      HOME_REGION: ${HOME_REGION:-local-region}
+      REGION_WRITER_ID: ${REGION_WRITER_ID:-local-region-primary}
+      LEASE_EPOCH: ${LEASE_EPOCH:-1}
+      LEASE_DURATION_SECONDS: ${LEASE_DURATION_SECONDS:-30}
+      BOOTSTRAP_LEASE: "true"
+      SIMULATE_STANDBY_ACK: "true"
+      ITEM_ID: flash-sale-demo
+      SEED_UNITS: "500"
+      INVENTORY_SHARDS: "3"
+      HOLD_TTL_SECONDS: "300"
+      PAYING_TTL_SECONDS: "120"
+      CLAIM_RETENTION_HOURS: "72"
+      TERMINAL_RETENTION_HOURS: "24"
+      ADMISSION_SIGNING_KEY_ID: ${ADMISSION_SIGNING_KEY_ID:-admission-v1}
+      ADMISSION_SIGNING_KEY: ${ADMISSION_SIGNING_KEY:?Set ADMISSION_SIGNING_KEY in .env}
+      PSP_WEBHOOK_SECRET: ${PSP_WEBHOOK_SECRET:?Set PSP_WEBHOOK_SECRET in .env}
+      PSP_RATE_PER_SECOND: ${PSP_RATE_PER_SECOND:-1400}
+      PSP_BURST: ${PSP_BURST:-50}
+      PSP_MAX_CONCURRENT: ${PSP_MAX_CONCURRENT:-64}
+      ADMIN_TOKEN: ${ADMIN_TOKEN:?Set ADMIN_TOKEN in .env}
+      RUN_STANDBY_MONITOR: "true"
+      RUN_ADMISSION_CONTROLLER: "true"
+      RUN_LEASE_MANAGER: "false"
+      RUN_WORKERS: "false"
+    depends_on:
+      redis-cluster-init: { condition: service_completed_successfully }
+      redis-ctrl: { condition: service_healthy }
+      redis-kv: { condition: service_healthy }
+      postgres: { condition: service_healthy }
+      redpanda-setup: { condition: service_completed_successfully }
+      mockpsp: { condition: service_healthy }
+    ports: ["8080:8080"]
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8080/healthz"]
+      interval: 5s
+      timeout: 2s
+      retries: 30
+    profiles: [app]
+
+  worker:
+    restart: unless-stopped
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: runtime
+    hostname: worker
+    entrypoint: ["/usr/local/bin/worker"]
+    networks: [flashsale]
+    environment:
+      DATABASE_URL: postgres://flashsale:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}@postgres:5432/flashsale?sslmode=disable
+      DB_POOL_SIZE: "8"
+      REDIS_CLUSTER_SEEDS: redis-inventory-1:6379,redis-inventory-2:6379,redis-inventory-3:6379
+      REDIS_CTRL_ADDR: redis-ctrl:6379
+      REDIS_KV_ADDR: redis-kv:6379
+      REDPANDA_HTTP_URL: http://redpanda:8082
+      PSP_URL: http://mockpsp:8090
+      HOME_REGION: ${HOME_REGION:-local-region}
+      REGION_WRITER_ID: ${REGION_WRITER_ID:-local-region-primary}
+      LEASE_EPOCH: ${LEASE_EPOCH:-1}
+      LEASE_DURATION_SECONDS: ${LEASE_DURATION_SECONDS:-30}
+      BOOTSTRAP_LEASE: "false"
+      SIMULATE_STANDBY_ACK: "true"
+      ITEM_ID: flash-sale-demo
+      SEED_UNITS: "0"
+      INVENTORY_SHARDS: "3"
+      HOLD_TTL_SECONDS: "300"
+      PAYING_TTL_SECONDS: "120"
+      CLAIM_RETENTION_HOURS: "72"
+      TERMINAL_RETENTION_HOURS: "24"
+      ADMISSION_SIGNING_KEY_ID: ${ADMISSION_SIGNING_KEY_ID:-admission-v1}
+      ADMISSION_SIGNING_KEY: ${ADMISSION_SIGNING_KEY:?Set ADMISSION_SIGNING_KEY in .env}
+      PSP_WEBHOOK_SECRET: ${PSP_WEBHOOK_SECRET:?Set PSP_WEBHOOK_SECRET in .env}
+      PSP_RATE_PER_SECOND: ${PSP_RATE_PER_SECOND:-1400}
+      PSP_BURST: ${PSP_BURST:-50}
+      PSP_MAX_CONCURRENT: ${PSP_MAX_CONCURRENT:-64}
+      RUN_STANDBY_MONITOR: "false"
+      RUN_LEASE_MANAGER: "true"
+    depends_on:
+      flashsale: { condition: service_healthy }
+      redis-cluster-init: { condition: service_completed_successfully }
+      redis-ctrl: { condition: service_healthy }
+      redis-kv: { condition: service_healthy }
+      postgres: { condition: service_healthy }
+      redpanda-setup: { condition: service_completed_successfully }
+      mockpsp: { condition: service_healthy }
+    profiles: [app]
+
+  mockpsp:
+    restart: unless-stopped
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: runtime
+    hostname: mockpsp
+    entrypoint: ["/usr/local/bin/mockpsp"]
+    networks: [flashsale]
+    environment:
+      HTTP_ADDR: ":8090"
+      PSP_WEBHOOK_URL: http://flashsale:8080/webhooks/psp
+      PSP_WEBHOOK_SECRET: ${PSP_WEBHOOK_SECRET:?Set PSP_WEBHOOK_SECRET in .env}
+    depends_on:
+      postgres: { condition: service_healthy }
+    ports: ["8090:8090"]
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8090/healthz"]
+      interval: 5s
+      timeout: 2s
+      retries: 30
+    profiles: [app]
+
+networks:
+  flashsale:
+    name: flash-sale-platform
+
+volumes:
+  redis-inventory-1:
+  redis-inventory-2:
+  redis-inventory-3:
+  postgres-data:

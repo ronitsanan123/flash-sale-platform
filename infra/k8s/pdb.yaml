@@ -1,0 +1,22 @@
+# Illustrative shared PDBs for stateless services; tune to actual replicas.
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: flashsale-api
+  namespace: flashsale
+spec:
+  maxUnavailable: 1
+  selector:
+    matchLabels:
+      app: flashsale-api
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: flashsale-workers
+  namespace: flashsale
+spec:
+  maxUnavailable: 1
+  selector:
+    matchLabels:
+      app: flashsale-workers
