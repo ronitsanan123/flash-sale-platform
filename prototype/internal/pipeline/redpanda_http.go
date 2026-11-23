@@ -171,7 +171,7 @@ func (l *RedpandaHTTPLog) ensureConsumer(ctx context.Context, topic, group strin
 		base = root.ResolveReference(base)
 	}
 	// Subscription is explicit; auto-commit is disabled.
-	_, _, err = l.request(ctx, http.MethodPost, strings.TrimRight(base.String(), "/")+"/subscription", "application/vnd.kafka.v2+json", "application/vnd.kafka.v2+json", []string{topic})
+	_, _, err = l.request(ctx, http.MethodPost, strings.TrimRight(base.String(), "/")+"/subscription", "application/vnd.kafka.v2+json", "application/vnd.kafka.v2+json", map[string][]string{"topics": {topic}})
 	if err != nil {
 		return nil, err
 	}
