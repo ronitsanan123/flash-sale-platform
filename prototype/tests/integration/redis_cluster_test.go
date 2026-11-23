@@ -33,7 +33,7 @@ func TestRedisClusterReserveNoOversell(t *testing.T) {
 	var successes atomic.Int64
 	var wg sync.WaitGroup
 	errCh:=make(chan error,5000)
-	for i:=0;i<5000;i++ { wg.Add(1); go func(i int){ defer wg.Done(); unit:=units[i%len(units)]; _,err:=store.Reserve(ctx,item,fmt.Sprintf("hold-%d",i),fmt.Sprintf("user-%d",i),unit); if err==nil { successes.Add(1); return }; if err!=inventory.ErrTaken { errCh<-err } }(i) }
+	for i:=0;i<5000;i++ { wg.Add(1); go func(i int){ defer wg.Done(); unit:=units[i%len(units)]; _,err:=store.Reserve(ctx,item,fmt.Sprintf("%s-hold-%d",item,i),fmt.Sprintf("user-%d",i),unit); if err==nil { successes.Add(1); return }; if err!=inventory.ErrTaken { errCh<-err } }(i) }
 	wg.Wait(); close(errCh)
 	for err:=range errCh { t.Errorf("unexpected reserve error: %v",err) }
 	if got:=successes.Load(); got!=100 { t.Fatalf("successful holds=%d, want 100",got) }
@@ -47,10 +47,10 @@ func TestRedisClusterForfeitDoesNotReturnUnitAndTombstonesID(t *testing.T) {
 	ctx,cancel:=context.WithTimeout(context.Background(),30*time.Second); defer cancel()
 	item:=fmt.Sprintf("ft-%d",time.Now().UnixNano()); unit:="fixed-seat"
 	if err:=store.Seed(ctx,item,[]string{unit}); err!=nil { t.Fatal(err) }
-	h,err:=store.Reserve(ctx,item,"hold-forfeit","user-a",unit); if err!=nil { t.Fatal(err) }
+	h,err:=store.Reserve(ctx,item,item+"-hold-forfeit","user-a",unit); if err!=nil { t.Fatal(err) }
 	if _,err:=store.LockForPayment(ctx,item,h.ID); err!=nil { t.Fatal(err) }
 	if err:=store.Forfeit(ctx,item,h.ID,inventory.ForfeitProofNotAttempted); err!=nil { t.Fatal(err) }
-	if _,err:=store.Reserve(ctx,item,"hold-second","user-b",unit); err!=inventory.ErrTaken && err!=inventory.ErrSoldOut { t.Fatalf("forfeited unit was reusable: %v",err) }
+	if _,err:=store.Reserve(ctx,item,item+"-hold-second","user-b",unit); err!=inventory.ErrTaken && err!=inventory.ErrSoldOut { t.Fatalf("forfeited unit was reusable: %v",err) }
 	if _,err:=store.Reserve(ctx,item,h.ID,"user-a",unit); err!=inventory.ErrHoldForfeited { t.Fatalf("forfeit replay=%v",err) }
 	_,_,_,_,forfeited,total,err:=store.Availability(ctx,item); if err!=nil { t.Fatal(err) }
 	if forfeited!=1 || total!=1 { t.Fatalf("forfeited=%d total=%d",forfeited,total) }
@@ -61,7 +61,7 @@ func TestRedisClusterReleasedHoldTombstoneSurvivesCleanup(t *testing.T) {
 	ctx,cancel:=context.WithTimeout(context.Background(),30*time.Second); defer cancel()
 	item:=fmt.Sprintf("rel-%d",time.Now().UnixNano()); unit:="unit-release"
 	if err:=store.Seed(ctx,item,[]string{unit}); err!=nil { t.Fatal(err) }
-	h,err:=store.Reserve(ctx,item,"hold-release","user-a",unit); if err!=nil { t.Fatal(err) }
+	h,err:=store.Reserve(ctx,item,item+"-hold-release","user-a",unit); if err!=nil { t.Fatal(err) }
 	// Force expiry with the shard script's Redis TIME; tests wait past its short TTL.
 	time.Sleep(5100*time.Millisecond)
 	shard,_:=inventory.ShardForSpecificSeat(unit,3)
