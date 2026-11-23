@@ -161,7 +161,8 @@ FROM region_leases WHERE home_region=$1 FOR SHARE`, lease.HomeRegion)
 	if epoch != lease.Epoch {
 		return ErrFenced
 	}
-	if col(r, 0, 2) != "t" {
+	valid, parseErr := strconv.ParseBool(col(r, 0, 2))
+	if parseErr != nil || !valid {
 		return ErrLeaseLost
 	}
 	return nil

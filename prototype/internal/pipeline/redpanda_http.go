@@ -171,7 +171,7 @@ func (l *RedpandaHTTPLog) ensureConsumer(ctx context.Context, topic, group strin
 		base = root.ResolveReference(base)
 	}
 	// Subscription is explicit; auto-commit is disabled.
-	_, _, err = l.request(ctx, http.MethodPost, strings.TrimRight(base.String(), "/")+"/subscription", "application/vnd.kafka.v2+json", "application/vnd.kafka.v2+json", []string{topic})
+	_, _, err = l.request(ctx, http.MethodPost, strings.TrimRight(base.String(), "/")+"/subscription", "application/vnd.kafka.v2+json", "application/vnd.kafka.v2+json", map[string][]string{"topics": {topic}})
 	if err != nil {
 		return nil, err
 	}
@@ -210,14 +210,14 @@ func (l *RedpandaHTTPLog) Fetch(ctx context.Context, topic, group string, max in
 	if err != nil {
 		return nil, err
 	}
-	var response struct {
-		Records []rpConsumerRecord `json:"records"`
-	}
-	if err := json.Unmarshal(b, &response); err != nil {
+	// Redpanda HTTP Proxy v2 returns fetched records as a top-level JSON
+	// array (unlike the produce response, which is an object).
+	var records []rpConsumerRecord
+	if err := json.Unmarshal(b, &records); err != nil {
 		return nil, err
 	}
-	messages := make([]Message, 0, len(response.Records))
-	for _, rec := range response.Records {
+	messages := make([]Message, 0, len(records))
+	for _, rec := range records {
 		var m Message
 		if err := json.Unmarshal([]byte(rec.Value), &m); err != nil {
 			return nil, fmt.Errorf("decode Redpanda record %s/%d: %w", topic, rec.Offset, err)
@@ -255,10 +255,9 @@ func (l *RedpandaHTTPLog) Commit(ctx context.Context, topic, group string, parti
 	if err != nil {
 		return err
 	}
-	// Kafka REST Proxy v2 expects an `offsets` array with the next offset
-	// to consume. Using `partitions` is accepted by neither the v2 consumer
-	// commit endpoint nor Redpanda's HTTP Proxy compatibility layer.
-	body := map[string]any{"offsets": []map[string]any{{"topic": topic, "partition": partition, "offset": offset + 1}}}
+	// Redpanda HTTP Proxy v2 expects a `partitions` array. The committed
+	// offset is the last processed record offset (not the next offset).
+	body := map[string]any{"partitions": []map[string]any{{"topic": topic, "partition": partition, "offset": offset}}}
 	_, _, err = l.request(ctx, http.MethodPost, s.baseURI+"/offsets", "application/vnd.kafka.v2+json", "application/vnd.kafka.v2+json", body)
 	if err != nil {
 		return err

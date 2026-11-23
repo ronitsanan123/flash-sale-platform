@@ -10,7 +10,7 @@ import (
 	"testing"
 )
 
-func TestRedpandaCommitUsesOffsetsPayloadAndNextOffset(t *testing.T) {
+func TestRedpandaCommitUsesPartitionsPayloadAndLastProcessedOffset(t *testing.T) {
 	var got map[string]any
 	var calls []string
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -42,15 +42,15 @@ func TestRedpandaCommitUsesOffsetsPayloadAndNextOffset(t *testing.T) {
 	if len(calls) != 3 {
 		t.Fatalf("calls=%v, want create/subscription/offset commit", calls)
 	}
-	if _, ok := got["partitions"]; ok {
-		t.Fatalf("unexpected partitions payload: %#v", got)
+	if _, ok := got["offsets"]; ok {
+		t.Fatalf("unexpected offsets payload: %#v", got)
 	}
-	offsets, ok := got["offsets"].([]any)
-	if !ok || len(offsets) != 1 {
-		t.Fatalf("offsets payload missing: %#v", got)
+	partitions, ok := got["partitions"].([]any)
+	if !ok || len(partitions) != 1 {
+		t.Fatalf("partitions payload missing: %#v", got)
 	}
-	entry, ok := offsets[0].(map[string]any)
-	if !ok || entry["topic"] != "checkout-events" || entry["partition"] != float64(7) || entry["offset"] != float64(42) {
-		t.Fatalf("wrong next-offset commit: %#v", got)
+	entry, ok := partitions[0].(map[string]any)
+	if !ok || entry["topic"] != "checkout-events" || entry["partition"] != float64(7) || entry["offset"] != float64(41) {
+		t.Fatalf("wrong last-processed-offset commit: %#v", got)
 	}
 }
