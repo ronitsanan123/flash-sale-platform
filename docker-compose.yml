@@ -173,6 +173,11 @@ services:
       - 0.0.0.0:8082
       - --schema-registry-addr
       - 0.0.0.0:8081
+      - --set
+      - pandaproxy:
+          pandaproxy_api:
+            - address: 0.0.0.0
+              port: 8082
     healthcheck:
       test: ["CMD", "rpk", "cluster", "health", "--brokers", "redpanda:9092"]
       interval: 5s
