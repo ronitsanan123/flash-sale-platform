@@ -255,10 +255,9 @@ func (l *RedpandaHTTPLog) Commit(ctx context.Context, topic, group string, parti
 	if err != nil {
 		return err
 	}
-	// Kafka REST Proxy v2 expects an `offsets` array with the next offset
-	// to consume. Using `partitions` is accepted by neither the v2 consumer
-	// commit endpoint nor Redpanda's HTTP Proxy compatibility layer.
-	body := map[string]any{"offsets": []map[string]any{{"topic": topic, "partition": partition, "offset": offset + 1}}}
+	// Redpanda HTTP Proxy v2 expects a `partitions` array. The committed
+	// offset is the last processed record offset (not the next offset).
+	body := map[string]any{"partitions": []map[string]any{{"topic": topic, "partition": partition, "offset": offset}}}
 	_, _, err = l.request(ctx, http.MethodPost, s.baseURI+"/offsets", "application/vnd.kafka.v2+json", "application/vnd.kafka.v2+json", body)
 	if err != nil {
 		return err
