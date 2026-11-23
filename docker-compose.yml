@@ -171,13 +171,12 @@ services:
       - redpanda:33145
       - --http-proxy-addr
       - 0.0.0.0:8082
+      - --pandaproxy-addr
+      - internal://0.0.0.0:8082
+      - --advertise-pandaproxy-addr
+      - internal://redpanda:8082
       - --schema-registry-addr
       - 0.0.0.0:8081
-      - --set
-      - pandaproxy:
-          pandaproxy_api:
-            - address: 0.0.0.0
-              port: 8082
     healthcheck:
       test: ["CMD", "rpk", "cluster", "health", "--brokers", "redpanda:9092"]
       interval: 5s
