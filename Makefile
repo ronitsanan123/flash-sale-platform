@@ -92,7 +92,7 @@ test-regional-recovery: compose-ready ## Run the unknown-order-ID regional recov
 	$(COMPOSE) run --rm integration go test -race -p 1 -parallel 1 -run '^TestRegionalRecovery' ./tests/integration/...
 
 smoke-compose: check-compose ## Smoke-test the running Compose app profile (requires .env and make app-up)
-	bash $(PROJECT_ROOT)/scripts/smoke-compose.sh
+	$(PROJECT_ROOT)/scripts/smoke-compose.sh
 
 app-up: check-compose ## Start the complete local app profile
 	$(COMPOSE) --profile app up -d --build --wait
@@ -101,7 +101,7 @@ app-down: check-compose ## Stop local app profile and retain data volumes
 	$(COMPOSE) --profile app down --remove-orphans
 
 audit-local: ## Run all checks that do not require Docker or external services
-	bash $(PROJECT_ROOT)/scripts/audit-local.sh
+	$(PROJECT_ROOT)/scripts/audit-local.sh
 
 clean: check-compose ## Stop containers without deleting volumes
 	$(COMPOSE) down --remove-orphans
