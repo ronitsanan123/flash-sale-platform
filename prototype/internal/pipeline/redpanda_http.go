@@ -210,14 +210,14 @@ func (l *RedpandaHTTPLog) Fetch(ctx context.Context, topic, group string, max in
 	if err != nil {
 		return nil, err
 	}
-	var response struct {
-		Records []rpConsumerRecord `json:"records"`
-	}
-	if err := json.Unmarshal(b, &response); err != nil {
+	// Redpanda HTTP Proxy v2 returns fetched records as a top-level JSON
+	// array (unlike the produce response, which is an object).
+	var records []rpConsumerRecord
+	if err := json.Unmarshal(b, &records); err != nil {
 		return nil, err
 	}
-	messages := make([]Message, 0, len(response.Records))
-	for _, rec := range response.Records {
+	messages := make([]Message, 0, len(records))
+	for _, rec := range records {
 		var m Message
 		if err := json.Unmarshal([]byte(rec.Value), &m); err != nil {
 			return nil, fmt.Errorf("decode Redpanda record %s/%d: %w", topic, rec.Offset, err)
